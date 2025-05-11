@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>lilRoby Virtual Printer</title>
+  <title>Realistic Virtual Printer</title>
   <style>
     body {
       background: #f0f0f0;
@@ -10,6 +10,11 @@
       text-align: center;
       padding: 40px;
     }
+
+    h1 {
+      margin-bottom: 40px;
+    }
+
     .printer {
       width: 300px;
       height: 200px;
@@ -18,52 +23,61 @@
       border-radius: 20px;
       position: relative;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
     }
+
     .slot {
       width: 260px;
       height: 10px;
-      background: #222;
+      background: #111;
       position: absolute;
       top: 90px;
       left: 20px;
       border-radius: 5px;
       z-index: 10;
     }
+
+    .paper-wrapper {
+      position: absolute;
+      top: 90px;
+      left: 20px;
+      width: 260px;
+      height: 200px;
+      overflow: hidden;
+      z-index: 1;
+    }
+
     .paper {
       width: 260px;
       height: 200px;
       background: white;
       position: absolute;
-      top: 90px;
-      left: 20px;
-      z-index: 1;
-      overflow: hidden;
-      transform: translateY(-100%);
-      animation: printOut 4s ease-in-out forwards;
+      top: -200px; /* Start hidden above the slot */
+      left: 0;
+      transition: transform 4s ease-in-out;
     }
+
     .paper img {
       width: 100%;
       height: auto;
+      display: block;
     }
 
-    @keyframes printOut {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(20px); }
-    }
-
-    h1 {
-      margin-bottom: 40px;
+    .printing {
+      transform: translateY(220px); /* Slide out downward */
     }
   </style>
 </head>
 <body>
 
-  <h1>Virtual Printer: lilRoby Feed</h1>
+  <h1>lilRoby Virtual Printer</h1>
 
   <div class="printer">
     <div class="slot"></div>
-    <div id="paper" class="paper">
-      <img id="printImage" src="https://placekitten.com/260/200" alt="Printed Image">
+    <div class="paper-wrapper">
+      <div id="paper" class="paper">
+        <img id="printImage" src="https://placekitten.com/260/200" alt="Printing...">
+      </div>
     </div>
   </div>
 
@@ -72,17 +86,22 @@
     const printImage = document.getElementById('printImage');
 
     function printNewImage() {
-      // Reset animation
-      paper.style.animation = 'none';
-      void paper.offsetWidth; // Trigger reflow
-      paper.style.animation = 'printOut 4s ease-in-out forwards';
+      // Reset position
+      paper.classList.remove('printing');
 
-      // Update image with timestamp to avoid caching
+      // Change image (use actual feed here if available)
       const timestamp = new Date().getTime();
       printImage.src = `https://placekitten.com/260/200?time=${timestamp}`;
+
+      // Trigger reflow then animation
+      void paper.offsetWidth;
+      paper.classList.add('printing');
     }
 
-    // Print every 10 seconds
+    // Run initially
+    printNewImage();
+
+    // Then every 10 seconds
     setInterval(printNewImage, 10000);
   </script>
 
