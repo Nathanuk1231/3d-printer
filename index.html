@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Virtual Multi-Printer</title>
+  <title>Virtual Printer</title>
   <style>
     body {
       background: #f0f0f0;
@@ -79,7 +79,7 @@
 </head>
 <body>
 
-  <h1>lilRoby Multi Virtual Printer</h1>
+  <h1>lilRoby Virtual Printer</h1>
 
   <div class="printer">
     <div class="slot"></div>
@@ -94,9 +94,16 @@
     const paperWrapper = document.getElementById('paper-wrapper');
     const outputArea = document.getElementById('output-area');
 
-    function printNewImage() {
-      const timestamp = new Date().getTime();
-      const imageUrl = `https://placekitten.com/260/200?time=${timestamp}`; // Replace with real URL if available
+    // Connect to the WebSocket server at the new URL
+    const ws = new WebSocket('wss://lilroby-printing.onrender.com');
+
+    ws.onopen = () => {
+      console.log('Connected to WebSocket');
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const imageUrl = data.imageUrl;
 
       const paper = document.createElement('div');
       paper.classList.add('paper');
@@ -119,15 +126,17 @@
         paper.style.transform = 'none';
         paper.style.transition = 'none';
       }, 4000);
-    }
+    };
 
-    // First print right away
-    printNewImage();
+    ws.onclose = () => {
+      console.log('Disconnected from WebSocket');
+    };
 
-    // Repeat every 10 seconds
-    setInterval(printNewImage, 10000);
+    // Example of sending a message to the server (can be used to request new images)
+    setInterval(() => {
+      ws.send('Requesting new image');
+    }, 10000);  // Every 10 seconds
   </script>
 
 </body>
 </html>
-
