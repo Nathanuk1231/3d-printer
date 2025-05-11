@@ -95,7 +95,7 @@
     const outputArea = document.getElementById('output-area');
 
     // Connect to the WebSocket server at the new URL
-    const ws = new WebSocket('wss://lilroby-printing.onrender.com');
+    const ws = new WebSocket('https://lilroby-printing.onrender.com');
 
     ws.onopen = () => {
       console.log('Connected to WebSocket');
@@ -103,7 +103,7 @@
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      const imageUrl = data.imageUrl;
+      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
 
       const paper = document.createElement('div');
       paper.classList.add('paper');
