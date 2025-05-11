@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Realistic Virtual Printer</title>
+  <title>Virtual Multi-Printer</title>
   <style>
     body {
       background: #f0f0f0;
@@ -43,7 +43,7 @@
       left: 20px;
       width: 260px;
       height: 200px;
-      overflow: hidden;
+      overflow: visible;
       z-index: 1;
     }
 
@@ -52,9 +52,10 @@
       height: 200px;
       background: white;
       position: absolute;
-      top: -200px; /* Start hidden above the slot */
+      top: -200px;
       left: 0;
       transition: transform 4s ease-in-out;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
     }
 
     .paper img {
@@ -64,46 +65,69 @@
     }
 
     .printing {
-      transform: translateY(220px); /* Slide out downward */
+      transform: translateY(220px);
+    }
+
+    #output-area {
+      margin-top: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
     }
   </style>
 </head>
 <body>
 
-  <h1>lilRoby Virtual Printer</h1>
+  <h1>lilRoby Multi Virtual Printer</h1>
 
   <div class="printer">
     <div class="slot"></div>
-    <div class="paper-wrapper">
-      <div id="paper" class="paper">
-        <img id="printImage" src="https://placekitten.com/260/200" alt="Printing...">
-      </div>
+    <div class="paper-wrapper" id="paper-wrapper">
+      <!-- New papers get injected here -->
     </div>
   </div>
 
+  <div id="output-area"></div>
+
   <script>
-    const paper = document.getElementById('paper');
-    const printImage = document.getElementById('printImage');
+    const paperWrapper = document.getElementById('paper-wrapper');
+    const outputArea = document.getElementById('output-area');
 
     function printNewImage() {
-      // Reset position
-      paper.classList.remove('printing');
-
-      // Change image (use actual feed here if available)
       const timestamp = new Date().getTime();
-      printImage.src = `https://placekitten.com/260/200?time=${timestamp}`;
+      const imageUrl = `https://placekitten.com/260/200?time=${timestamp}`; // Replace with real URL if available
 
-      // Trigger reflow then animation
-      void paper.offsetWidth;
-      paper.classList.add('printing');
+      const paper = document.createElement('div');
+      paper.classList.add('paper');
+
+      const img = document.createElement('img');
+      img.src = imageUrl;
+
+      paper.appendChild(img);
+      paperWrapper.appendChild(paper);
+
+      // Trigger the animation
+      requestAnimationFrame(() => {
+        paper.classList.add('printing');
+      });
+
+      // After animation, move it to output area (like a print tray)
+      setTimeout(() => {
+        outputArea.appendChild(paper);
+        paper.style.position = 'static';
+        paper.style.transform = 'none';
+        paper.style.transition = 'none';
+      }, 4000);
     }
 
-    // Run initially
+    // First print right away
     printNewImage();
 
-    // Then every 10 seconds
+    // Repeat every 10 seconds
     setInterval(printNewImage, 10000);
   </script>
 
 </body>
 </html>
+
