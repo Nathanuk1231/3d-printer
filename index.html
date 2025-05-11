@@ -52,7 +52,7 @@
       height: 200px;
       background: white;
       position: absolute;
-      top: -200px;
+      top: 0;
       left: 0;
       transition: transform 4s ease-in-out;
       box-shadow: 0 4px 6px rgba(0,0,0,0.2);
@@ -65,7 +65,7 @@
     }
 
     .printing {
-      transform: translateY(220px);
+      transform: translateY(220px); /* Moves the paper down from the slot */
     }
 
     #output-area {
@@ -107,7 +107,7 @@
       paper.appendChild(img);
       paperWrapper.appendChild(paper);
 
-      // Trigger the animation
+      // Trigger the animation (make it print from the slot)
       requestAnimationFrame(() => {
         paper.classList.add('printing');
       });
