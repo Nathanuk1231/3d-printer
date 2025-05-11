@@ -90,19 +90,21 @@
 
   <div id="output-area"></div>
 
+  <!-- Include the Socket.IO client library -->
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
   <script>
     const paperWrapper = document.getElementById('paper-wrapper');
     const outputArea = document.getElementById('output-area');
 
-    // Connect to the WebSocket server at the new URL
-    const ws = new WebSocket('https://lilroby-printing.onrender.com');
+    // Connect to the Socket.IO server at the new URL
+    const socket = io('https://lilroby-printing.onrender.com');
 
-    ws.onopen = () => {
-      console.log('Connected to WebSocket');
-    };
+    socket.on('connect', () => {
+      console.log('Connected to Socket.IO');
+    });
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    socket.on('new-print', (data) => {
       const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
 
       const paper = document.createElement('div');
@@ -126,15 +128,15 @@
         paper.style.transform = 'none';
         paper.style.transition = 'none';
       }, 4000);
-    };
+    });
 
-    ws.onclose = () => {
-      console.log('Disconnected from WebSocket');
-    };
+    socket.on('disconnect', () => {
+      console.log('Disconnected from Socket.IO');
+    });
 
     // Example of sending a message to the server (can be used to request new images)
     setInterval(() => {
-      ws.send('Requesting new image');
+      socket.emit('request-new-image', 'Requesting new image');
     }, 10000);  // Every 10 seconds
   </script>
 
