@@ -38,6 +38,16 @@
       top: 10px;
       right: 10px;
       box-shadow: 0 0 8px #4CAF50;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 5px #4CAF50;
+      }
+      50% {
+        box-shadow: 0 0 15px #4CAF50;
+      }
     }
 
     .slot {
@@ -79,7 +89,7 @@
     }
 
     .printing {
-      transform: translateY(220px); /* simulate print motion */
+      transform: translateY(220px);
     }
 
     #output-area {
@@ -90,7 +100,6 @@
       gap: 20px;
     }
 
-    /* Glasses overlay (based on uploaded image) */
     .glasses-face {
       background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAACXBIWXMAAA7EAAAOxAGVKw4bAAACl0lEQVR4nO2aX2sTURiGv/ffCSRLImSHhUKGhv0bJRIggUkS6e8QZC/EMGjFxMQE8QPgAaREq+goa3biY+QtA6RIBEEVBAZEUSlE0pOfGZPpt+aqEapmXq997HtmZ+b7Zk5d+5chRDAe1OtVotFzPfB3yAuQdPG10ZSmRIxFz/FhR3YpzwGDJ4g5RYaNlfQQKQ/BN7tyDQ5uTlyxgXBmCCkDxZVq9dZ+7YkUtOD0cpt7VteI8NvN6BBAnLzvAUV2AFh2H7OwKfdKyBdydBrmA+tzWr0eLoKo2mjBZGM4UleKkl+0xJ0GVXe2o5KQZEU0J0EPXkX+mdEzAD3F+BFLeyO5qBU5+xevvT2bFBWsItRXwKzIC7KopKowJJ7QzojAmsFHZB6GGzT+r8ZZScz6cFD7TxSldL4F0HGKMTnN6NhLo3RfTT6/NxatVqBgPejkgHD5uF1dXREh5Gbh0YkOqK6GAXTuDpKIm/7zAoNdX3q2k4J1ydTExwaHk5NhsNhs3MyP0MYbC4MBoNWq5WZrNYLCYo0XslV59Fn8oG+5DEe3P8PEyrQck0HaZPHfuNyd2ePO5tbDNisZVKETqwmEw2");
       background-size: contain;
@@ -108,64 +117,73 @@
 </head>
 <body>
 
-  <h1>lilRoby Virtual Printer</h1>
+<h1>lilRoby Virtual Printer</h1>
 
-  <div class="printer">
-    <div class="power-led"></div>
-    <div class="glasses-face"></div>
-    <div class="slot"></div>
-    <div class="paper-wrapper" id="paper-wrapper">
-      <!-- Printed pages appear here -->
-    </div>
-  </div>
+<div class="printer">
+  <div class="power-led"></div>
+  <div class="glasses-face"></div>
+  <div class="slot"></div>
+  <div class="paper-wrapper" id="paper-wrapper"></div>
+</div>
 
-  <div id="output-area"></div>
+<div id="output-area"></div>
+<audio id="print-sound" src="https://www.myinstants.com/media/sounds/printer-sound.mp3" preload="auto"></audio>
 
-  <!-- Socket.IO client -->
-  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+  const paperWrapper = document.getElementById('paper-wrapper');
+  const outputArea = document.getElementById('output-area');
+  const printSound = document.getElementById('print-sound');
+  const printQueue = [];
+  let isPrinting = false;
 
-  <script>
-    const paperWrapper = document.getElementById('paper-wrapper');
-    const outputArea = document.getElementById('output-area');
+  const socket = io('https://lilroby-printing.onrender.com');
 
-    const socket = io('https://lilroby-printing.onrender.com');
+  socket.on('connect', () => {
+    console.log('Connected to Socket.IO');
+  });
 
-    socket.on('connect', () => {
-      console.log('Connected to Socket.IO');
-    });
+  socket.on('new_data', (data) => {
+    const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
+    printQueue.push(imageUrl);
+    processQueue();
+  });
 
-    socket.on('new_data', (data) => {
-      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
+  function processQueue() {
+    if (isPrinting || printQueue.length === 0) return;
 
-      const paper = document.createElement('div');
-      paper.classList.add('paper');
+    isPrinting = true;
+    const imageUrl = printQueue.shift();
 
-      const img = document.createElement('img');
-      img.src = imageUrl;
+    const paper = document.createElement('div');
+    paper.classList.add('paper');
 
-      paper.appendChild(img);
-      paperWrapper.appendChild(paper);
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    paper.appendChild(img);
+    paperWrapper.appendChild(paper);
 
-      requestAnimationFrame(() => {
-        paper.classList.add('printing');
-      });
+    printSound.play();
+    requestAnimationFrame(() => paper.classList.add('printing'));
 
-      setTimeout(() => {
-        outputArea.appendChild(paper);
-        paper.style.position = 'static';
-        paper.style.transform = 'none';
-        paper.style.transition = 'none';
-      }, 4000);
-    });
+    setTimeout(() => {
+      outputArea.appendChild(paper);
+      paper.style.position = 'static';
+      paper.style.transform = 'none';
+      paper.style.transition = 'none';
+      isPrinting = false;
+      processQueue();
+    }, 4000);
+  }
 
-    socket.on('disconnect', () => {
-      console.log('Disconnected from Socket.IO');
-    });
+  socket.on('disconnect', () => {
+    console.log('Disconnected from Socket.IO');
+  });
 
-    setInterval(() => {
-      socket.emit('request-new-image', 'Requesting new image');
-    }, 10000);  // Request every 10 seconds
-  </script>
+  setInterval(() => {
+    socket.emit('request-new-image', 'Requesting new image');
+  }, 10000);
+</script>
 
 </body>
 </html>
