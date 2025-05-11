@@ -2,70 +2,104 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Virtual Printer</title>
+  <title>lilRoby Virtual Printer</title>
   <style>
     body {
-      background: #f0f0f0;
-      font-family: sans-serif;
-      text-align: center;
-      padding: 40px;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #c2e9fb 0%, #f9f9f9 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 50px;
+      min-height: 100vh;
     }
 
     h1 {
-      margin-bottom: 40px;
+      margin-bottom: 30px;
+      color: #333;
     }
 
     .printer {
-      width: 300px;
-      height: 200px;
-      background: #333;
-      margin: 0 auto;
-      border-radius: 20px;
+      width: 250px;
+      height: 250px;
+      background: #fff;
+      border: 4px solid #222;
+      border-radius: 8px;
       position: relative;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-      overflow: hidden;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      perspective: 1000px;
+    }
+
+    .glasses-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: white;
+      background-image: url("https://lilroby.github.io/assets/lilroby-glasses.png"); /* You should host this image on GitHub */
+      background-repeat: no-repeat;
+      background-position: center 40%;
+      background-size: 120px;
+      z-index: 2;
     }
 
     .slot {
-      width: 260px;
-      height: 10px;
-      background: #111;
+      width: 200px;
+      height: 12px;
+      background: #333;
       position: absolute;
-      top: 90px;
-      left: 20px;
-      border-radius: 5px;
-      z-index: 10;
+      bottom: 30px;
+      border-radius: 6px;
+      z-index: 3;
+    }
+
+    .power-led {
+      width: 12px;
+      height: 12px;
+      background: limegreen;
+      border-radius: 50%;
+      box-shadow: 0 0 10px limegreen;
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 3;
     }
 
     .paper-wrapper {
       position: absolute;
-      top: 90px;
-      left: 20px;
-      width: 260px;
-      height: 200px;
+      bottom: 42px;
+      width: 200px;
+      height: 220px;
       overflow: visible;
       z-index: 1;
     }
 
     .paper {
-      width: 260px;
+      width: 200px;
       height: 200px;
       background: white;
       position: absolute;
-      top: 0;
+      bottom: 0;
       left: 0;
       transition: transform 4s ease-in-out;
       box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+      border-radius: 4px;
     }
 
     .paper img {
       width: 100%;
       height: auto;
       display: block;
+      border-radius: 4px;
     }
 
     .printing {
-      transform: translateY(220px); /* Moves the paper down from the slot */
+      transform: translateY(220px);
     }
 
     #output-area {
@@ -82,22 +116,19 @@
   <h1>lilRoby Virtual Printer</h1>
 
   <div class="printer">
+    <div class="glasses-face"></div>
     <div class="slot"></div>
-    <div class="paper-wrapper" id="paper-wrapper">
-      <!-- New papers get injected here -->
-    </div>
+    <div class="power-led"></div>
+    <div class="paper-wrapper" id="paper-wrapper"></div>
   </div>
 
   <div id="output-area"></div>
 
-  <!-- Include the Socket.IO client library -->
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-
   <script>
     const paperWrapper = document.getElementById('paper-wrapper');
     const outputArea = document.getElementById('output-area');
 
-    // Connect to the Socket.IO server at the new URL
     const socket = io('https://lilroby-printing.onrender.com');
 
     socket.on('connect', () => {
@@ -105,7 +136,7 @@
     });
 
     socket.on('new_data', (data) => {
-      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
+      const imageUrl = `https://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
 
       const paper = document.createElement('div');
       paper.classList.add('paper');
@@ -113,20 +144,27 @@
       const img = document.createElement('img');
       img.src = imageUrl;
 
+      img.onerror = () => {
+        console.warn('Failed to load image:', imageUrl);
+        paper.remove();
+      };
+
       paper.appendChild(img);
       paperWrapper.appendChild(paper);
 
-      // Trigger the animation (make it print from the slot)
       requestAnimationFrame(() => {
         paper.classList.add('printing');
       });
 
-      // After animation, move it to output area (like a print tray)
       setTimeout(() => {
         outputArea.appendChild(paper);
         paper.style.position = 'static';
         paper.style.transform = 'none';
         paper.style.transition = 'none';
+
+        if (outputArea.children.length > 50) {
+          outputArea.removeChild(outputArea.firstChild);
+        }
       }, 4000);
     });
 
@@ -134,10 +172,9 @@
       console.log('Disconnected from Socket.IO');
     });
 
-    // Example of sending a message to the server (can be used to request new images)
     setInterval(() => {
       socket.emit('request-new-image', 'Requesting new image');
-    }, 10000);  // Every 10 seconds
+    }, 10000);
   </script>
 
 </body>
