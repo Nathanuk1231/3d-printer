@@ -101,7 +101,7 @@
     }
 
     .glasses-face {
-      background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAACXBIWXMAAA7EAAAOxAGVKw4bAAACl0lEQVR4nO2aX2sTURiGv/ffCSRLImSHhUKGhv0bJRIggUkS6e8QZC/EMGjFxMQE8QPgAaREq+goa3biY+QtA6RIBEEVBAZEUSlE0pOfGZPpt+aqEapmXq997HtmZ+b7Zk5d+5chRDAe1OtVotFzPfB3yAuQdPG10ZSmRIxFz/FhR3YpzwGDJ4g5RYaNlfQQKQ/BN7tyDQ5uTlyxgXBmCCkDxZVq9dZ+7YkUtOD0cpt7VteI8NvN6BBAnLzvAUV2AFh2H7OwKfdKyBdydBrmA+tzWr0eLoKo2mjBZGM4UleKkl+0xJ0GVXe2o5KQZEU0J0EPXkX+mdEzAD3F+BFLeyO5qBU5+xevvT2bFBWsItRXwKzIC7KopKowJJ7QzojAmsFHZB6GGzT+r8ZZScz6cFD7TxSldL4F0HGKMTnN6NhLo3RfTT6/NxatVqBgPejkgHD5uF1dXREh5Gbh0YkOqK6GAXTuDpKIm/7zAoNdX3q2k4J1ydTExwaHk5NhsNhs3MyP0MYbC4MBoNWq5WZrNYLCYo0XslV59Fn8oG+5DEe3P8PEyrQck0HaZPHfuNyd2ePO5tbDNisZVKETqwmEw2");
+      background-image: url("https://example.com/glasses-image.png"); /* Replace with actual URL */
       background-size: contain;
       background-repeat: no-repeat;
       background-position: center;
@@ -112,6 +112,24 @@
       left: 100px;
       z-index: 15;
       pointer-events: none;
+    }
+
+    .print-card {
+      text-align: left;
+      margin-top: 10px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      width: 260px;
+    }
+
+    .print-card h2 {
+      margin-top: 0;
+    }
+
+    .print-card p {
+      margin: 5px 0;
     }
   </style>
 </head>
@@ -145,7 +163,43 @@
 
   socket.on('new_data', (data) => {
     const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
-    printQueue.push(imageUrl);
+
+    // Create a print card
+    const printCard = document.createElement('div');
+    printCard.classList.add('print-card');
+
+    // Add Name, Message, Title, and Post ID
+    const title = document.createElement('h2');
+    title.textContent = data.title;
+    printCard.appendChild(title);
+
+    const name = document.createElement('p');
+    name.textContent = `From: ${data.name}`;
+    printCard.appendChild(name);
+
+    const message = document.createElement('p');
+    message.textContent = `Message: ${data.message}`;
+    printCard.appendChild(message);
+
+    const postId = document.createElement('p');
+    postId.textContent = `Post ID: ${data.post_id}`;
+    printCard.appendChild(postId);
+
+    // Create the paper element with the image
+    const paper = document.createElement('div');
+    paper.classList.add('paper');
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    paper.appendChild(img);
+
+    // Append to paper-wrapper and start the printing process
+    paperWrapper.appendChild(printCard);
+    paperWrapper.appendChild(paper);
+
+    // Play sound effect
+    printSound.play().catch((err) => console.log('Error playing sound: ', err));
+
+    printQueue.push(printCard);
     processQueue();
   });
 
@@ -153,24 +207,16 @@
     if (isPrinting || printQueue.length === 0) return;
 
     isPrinting = true;
-    const imageUrl = printQueue.shift();
+    const printCard = printQueue.shift();
 
-    const paper = document.createElement('div');
-    paper.classList.add('paper');
-
-    const img = document.createElement('img');
-    img.src = imageUrl;
-    paper.appendChild(img);
-    paperWrapper.appendChild(paper);
-
-    printSound.play();
+    const paper = printCard.querySelector('.paper');
     requestAnimationFrame(() => paper.classList.add('printing'));
 
     setTimeout(() => {
-      outputArea.appendChild(paper);
-      paper.style.position = 'static';
-      paper.style.transform = 'none';
-      paper.style.transition = 'none';
+      outputArea.appendChild(printCard);
+      printCard.style.position = 'static';
+      printCard.style.transform = 'none';
+      printCard.style.transition = 'none';
       isPrinting = false;
       processQueue();
     }, 4000);
