@@ -2,48 +2,89 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>lilRoby Snapshot</title>
+  <title>lilRoby Virtual Printer</title>
   <style>
     body {
+      background: #f0f0f0;
       font-family: sans-serif;
       text-align: center;
-      padding: 20px;
+      padding: 40px;
     }
-    #snapshot {
-      max-width: 100%;
-      border: 2px solid #000;
+    .printer {
+      width: 300px;
+      height: 200px;
+      background: #333;
+      margin: 0 auto;
+      border-radius: 20px;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     }
-    button {
-      margin-top: 20px;
-      padding: 10px 20px;
-      font-size: 18px;
+    .slot {
+      width: 260px;
+      height: 10px;
+      background: #222;
+      position: absolute;
+      top: 90px;
+      left: 20px;
+      border-radius: 5px;
+      z-index: 10;
+    }
+    .paper {
+      width: 260px;
+      height: 200px;
+      background: white;
+      position: absolute;
+      top: 90px;
+      left: 20px;
+      z-index: 1;
+      overflow: hidden;
+      transform: translateY(-100%);
+      animation: printOut 4s ease-in-out forwards;
+    }
+    .paper img {
+      width: 100%;
+      height: auto;
+    }
+
+    @keyframes printOut {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(20px); }
+    }
+
+    h1 {
+      margin-bottom: 40px;
     }
   </style>
 </head>
 <body>
-  <h1>lilRoby Snapshot</h1>
 
-  <!-- Replace 'snapshot.jpg' with the actual image URL -->
-  <img id="snapshot" src="https://lilroby.wokki20.nl/snapshot.jpg" alt="lilRoby Snapshot">
+  <h1>Virtual Printer: lilRoby Feed</h1>
 
-  <br>
-  <button onclick="printSnapshot()">Print Snapshot</button>
+  <div class="printer">
+    <div class="slot"></div>
+    <div id="paper" class="paper">
+      <img id="printImage" src="https://placekitten.com/260/200" alt="Printed Image">
+    </div>
+  </div>
 
   <script>
-    function printSnapshot() {
-      const image = document.getElementById('snapshot');
-      const printWindow = window.open('', '_blank');
-      printWindow.document.write(`
-        <html>
-          <head><title>Print Snapshot</title></head>
-          <body style="text-align:center;">
-            <img src="${image.src}" style="max-width:100%;" />
-            <script>window.onload = function() { window.print(); window.close(); }<\/script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
+    const paper = document.getElementById('paper');
+    const printImage = document.getElementById('printImage');
+
+    function printNewImage() {
+      // Reset animation
+      paper.style.animation = 'none';
+      void paper.offsetWidth; // Trigger reflow
+      paper.style.animation = 'printOut 4s ease-in-out forwards';
+
+      // Update image with timestamp to avoid caching
+      const timestamp = new Date().getTime();
+      printImage.src = `https://placekitten.com/260/200?time=${timestamp}`;
     }
+
+    // Print every 10 seconds
+    setInterval(printNewImage, 10000);
   </script>
+
 </body>
 </html>
