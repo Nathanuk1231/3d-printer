@@ -104,7 +104,7 @@
       console.log('Connected to Socket.IO');
     });
 
-    socket.on('new-print', (data) => {
+    socket.on('new_data', (data) => {
       const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
 
       const paper = document.createElement('div');
