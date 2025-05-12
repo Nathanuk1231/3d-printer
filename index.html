@@ -2,73 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>lilRoby Virtual Printer</title>
+  <title>lilRoby 3D Virtual Printer</title>
   <style>
     body {
       background: linear-gradient(to bottom, #dfe9f3 0%, #ffffff 100%);
       font-family: sans-serif;
       text-align: center;
       padding: 40px;
+      perspective: 1200px;
     }
 
     h1 {
-      margin-bottom: 40px;
       font-family: monospace;
       color: #222;
+      margin-bottom: 40px;
+    }
+
+    .printer-scene {
+      width: 300px;
+      height: 200px;
+      margin: auto;
+      transform-style: preserve-3d;
+      transform: rotateX(15deg) rotateY(25deg);
+      position: relative;
     }
 
     .printer {
       width: 300px;
-      height: 220px;
-      background: #fff;
-      margin: 0 auto;
-      border-radius: 10px;
-      position: relative;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-      overflow: hidden;
-      border: 2px solid #ccc;
+      height: 200px;
+      position: absolute;
+      transform-style: preserve-3d;
+      transform: translateZ(-50px);
     }
 
+    .face {
+      position: absolute;
+      background: #eee;
+      border: 2px solid #ccc;
+      opacity: 1;
+    }
+
+    .front  { width: 300px; height: 200px; transform: translateZ(50px); background: linear-gradient(#fff, #ccc); }
+    .back   { width: 300px; height: 200px; transform: rotateY(180deg) translateZ(50px); }
+    .right  { width: 100px; height: 200px; right: 0; transform: rotateY(90deg) translateZ(150px); }
+    .left   { width: 100px; height: 200px; transform: rotateY(-90deg) translateZ(150px); }
+    .top    { width: 300px; height: 100px; transform: rotateX(90deg) translateZ(100px); }
+    .bottom { width: 300px; height: 100px; transform: rotateX(-90deg) translateZ(100px); }
+
     .power-led {
+      position: absolute;
       width: 12px;
       height: 12px;
       background-color: #4CAF50;
       border-radius: 50%;
-      position: absolute;
+      box-shadow: 0 0 8px #4CAF50;
       top: 10px;
       right: 10px;
-      box-shadow: 0 0 8px #4CAF50;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        box-shadow: 0 0 5px #4CAF50;
-      }
-      50% {
-        box-shadow: 0 0 15px #4CAF50;
-      }
+      z-index: 10;
     }
 
     .slot {
+      position: absolute;
       width: 260px;
       height: 10px;
-      background: #111;
-      position: absolute;
-      top: 90px;
+      background: #000;
+      top: 95px;
       left: 20px;
-      border-radius: 5px;
-      z-index: 10;
+      z-index: 11;
     }
 
     .paper-wrapper {
       position: absolute;
-      top: 90px;
-      left: 20px;
       width: 260px;
       height: 200px;
+      top: 95px;
+      left: 20px;
       overflow: visible;
-      z-index: 1;
+      z-index: 5;
+      transform-style: preserve-3d;
     }
 
     .paper {
@@ -80,12 +91,6 @@
       left: 0;
       transition: transform 4s ease-in-out;
       box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    }
-
-    .paper img {
-      width: 100%;
-      height: auto;
-      display: block;
     }
 
     .printing {
@@ -100,20 +105,6 @@
       gap: 20px;
     }
 
-    .glasses-face {
-      background-image: url("https://example.com/glasses-image.png"); /* Replace with actual URL */
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-      width: 100px;
-      height: 60px;
-      position: absolute;
-      top: 30px;
-      left: 100px;
-      z-index: 15;
-      pointer-events: none;
-    }
-
     .print-card {
       text-align: left;
       margin-top: 10px;
@@ -123,113 +114,96 @@
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
       width: 260px;
     }
-
-    .print-card h2 {
-      margin-top: 0;
-    }
-
-    .print-card p {
-      margin: 5px 0;
-    }
   </style>
 </head>
 <body>
+  <h1>lilRoby 3D Virtual Printer</h1>
 
-<h1>lilRoby Virtual Printer</h1>
+  <div class="printer-scene">
+    <div class="printer">
+      <div class="face front"></div>
+      <div class="face back"></div>
+      <div class="face right"></div>
+      <div class="face left"></div>
+      <div class="face top"></div>
+      <div class="face bottom"></div>
+      <div class="power-led"></div>
+      <div class="slot"></div>
+      <div class="paper-wrapper" id="paper-wrapper"></div>
+    </div>
+  </div>
 
-<div class="printer">
-  <div class="power-led"></div>
-  <div class="glasses-face"></div>
-  <div class="slot"></div>
-  <div class="paper-wrapper" id="paper-wrapper"></div>
-</div>
+  <div id="output-area"></div>
+  <audio id="print-sound" src="https://www.myinstants.com/media/sounds/printer-sound.mp3" preload="auto"></audio>
 
-<div id="output-area"></div>
-<audio id="print-sound" src="https://www.myinstants.com/media/sounds/printer-sound.mp3" preload="auto"></audio>
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  <script>
+    const paperWrapper = document.getElementById('paper-wrapper');
+    const outputArea = document.getElementById('output-area');
+    const printSound = document.getElementById('print-sound');
+    const printQueue = [];
+    let isPrinting = false;
 
-<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-<script>
-  const paperWrapper = document.getElementById('paper-wrapper');
-  const outputArea = document.getElementById('output-area');
-  const printSound = document.getElementById('print-sound');
-  const printQueue = [];
-  let isPrinting = false;
+    const socket = io('https://lilroby-printing.onrender.com');
 
-  const socket = io('https://lilroby-printing.onrender.com');
+    socket.on('connect', () => console.log('Connected to Socket.IO'));
 
-  socket.on('connect', () => {
-    console.log('Connected to Socket.IO');
-  });
+    socket.on('new_data', (data) => {
+      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
 
-  socket.on('new_data', (data) => {
-    const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
+      const printCard = document.createElement('div');
+      printCard.classList.add('print-card');
 
-    // Create a print card
-    const printCard = document.createElement('div');
-    printCard.classList.add('print-card');
+      const title = document.createElement('h2');
+      title.textContent = data.title;
+      printCard.appendChild(title);
 
-    // Add Name, Message, Title, and Post ID
-    const title = document.createElement('h2');
-    title.textContent = data.title;
-    printCard.appendChild(title);
+      const name = document.createElement('p');
+      name.textContent = `From: ${data.name}`;
+      printCard.appendChild(name);
 
-    const name = document.createElement('p');
-    name.textContent = `From: ${data.name}`;
-    printCard.appendChild(name);
+      const message = document.createElement('p');
+      message.textContent = `Message: ${data.message}`;
+      printCard.appendChild(message);
 
-    const message = document.createElement('p');
-    message.textContent = `Message: ${data.message}`;
-    printCard.appendChild(message);
+      const postId = document.createElement('p');
+      postId.textContent = `Post ID: ${data.post_id}`;
+      printCard.appendChild(postId);
 
-    const postId = document.createElement('p');
-    postId.textContent = `Post ID: ${data.post_id}`;
-    printCard.appendChild(postId);
+      const paper = document.createElement('div');
+      paper.classList.add('paper');
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.style.width = '100%';
+      paper.appendChild(img);
 
-    // Create the paper element with the image
-    const paper = document.createElement('div');
-    paper.classList.add('paper');
-    const img = document.createElement('img');
-    img.src = imageUrl;
-    paper.appendChild(img);
+      paperWrapper.appendChild(paper);
 
-    // Append to paper-wrapper and start the printing process
-    paperWrapper.appendChild(printCard);
-    paperWrapper.appendChild(paper);
+      printSound.play().catch((err) => console.log('Error playing sound:', err));
 
-    // Play sound effect
-    printSound.play().catch((err) => console.log('Error playing sound: ', err));
-
-    printQueue.push(printCard);
-    processQueue();
-  });
-
-  function processQueue() {
-    if (isPrinting || printQueue.length === 0) return;
-
-    isPrinting = true;
-    const printCard = printQueue.shift();
-
-    const paper = printCard.querySelector('.paper');
-    requestAnimationFrame(() => paper.classList.add('printing'));
-
-    setTimeout(() => {
-      outputArea.appendChild(printCard);
-      printCard.style.position = 'static';
-      printCard.style.transform = 'none';
-      printCard.style.transition = 'none';
-      isPrinting = false;
+      printQueue.push({ printCard, paper });
       processQueue();
-    }, 4000);
-  }
+    });
 
-  socket.on('disconnect', () => {
-    console.log('Disconnected from Socket.IO');
-  });
+    function processQueue() {
+      if (isPrinting || printQueue.length === 0) return;
 
-  setInterval(() => {
-    socket.emit('request-new-image', 'Requesting new image');
-  }, 10000);
-</script>
+      isPrinting = true;
+      const { printCard, paper } = printQueue.shift();
 
+      requestAnimationFrame(() => paper.classList.add('printing'));
+
+      setTimeout(() => {
+        outputArea.appendChild(printCard);
+        isPrinting = false;
+        paper.remove();
+        processQueue();
+      }, 4000);
+    }
+
+    setInterval(() => {
+      socket.emit('request-new-image', 'Requesting new image');
+    }, 10000);
+  </script>
 </body>
 </html>
