@@ -1,121 +1,145 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>lilRoby 3D Virtual Printer</title>
+  <meta charset="UTF-8">
+  <title>Virtual Printer</title>
   <style>
     body {
-      margin: 0;
-      background: linear-gradient(to bottom, #dfe9f3 0%, #ffffff 100%);
-      overflow: hidden;
+      background: #f0f0f0;
       font-family: sans-serif;
+      text-align: center;
+      padding: 40px;
     }
-    canvas {
+
+    h1 {
+      margin-bottom: 40px;
+    }
+
+    .printer {
+      width: 300px;
+      height: 200px;
+      background: #333;
+      margin: 0 auto;
+      border-radius: 20px;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .slot {
+      width: 260px;
+      height: 10px;
+      background: #111;
+      position: absolute;
+      top: 90px;
+      left: 20px;
+      border-radius: 5px;
+      z-index: 10;
+    }
+
+    .paper-wrapper {
+      position: absolute;
+      top: 90px;
+      left: 20px;
+      width: 260px;
+      height: 200px;
+      overflow: visible;
+      z-index: 1;
+    }
+
+    .paper {
+      width: 260px;
+      height: 200px;
+      background: white;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transition: transform 4s ease-in-out;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+
+    .paper img {
+      width: 100%;
+      height: auto;
       display: block;
     }
+
+    .printing {
+      transform: translateY(220px); /* Moves the paper down from the slot */
+    }
+
     #output-area {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.8);
-      padding: 10px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-      text-align: center;
-      z-index: 10;
+      margin-top: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
     }
   </style>
 </head>
 <body>
-<div id="output-area">Waiting for print jobs...</div>
-<audio id="print-sound" src="https://www.myinstants.com/media/sounds/printer-sound.mp3" preload="auto"></audio>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  <h1>lilRoby Virtual Printer</h1>
 
-<script>
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  <div class="printer">
+    <div class="slot"></div>
+    <div class="paper-wrapper" id="paper-wrapper">
+      <!-- New papers get injected here -->
+    </div>
+  </div>
 
-  const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.1;
+  <div id="output-area"></div>
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1);
-  scene.add(ambientLight);
+  <!-- Include the Socket.IO client library -->
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 
-  camera.position.set(0, 2, 5);
-  controls.update();
+  <script>
+    const paperWrapper = document.getElementById('paper-wrapper');
+    const outputArea = document.getElementById('output-area');
 
-  const loader = new THREE.GLTFLoader();
-  let printer;
-  loader.load('/mnt/data/3d_model_extracted/97029.glb', function (gltf) {
-    printer = gltf.scene;
-    printer.scale.set(1, 1, 1);
-    scene.add(printer);
-  });
+    // Connect to the Socket.IO server at the new URL
+    const socket = io('https://lilroby-printing.onrender.com');
 
-  // Paper printing animation placeholder
-  const paperGeometry = new THREE.PlaneGeometry(1.5, 1);
-  const paperMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const paper = new THREE.Mesh(paperGeometry, paperMaterial);
-  paper.position.set(0, -0.5, 0);
-  paper.rotation.x = -Math.PI / 2;
-  paper.visible = false;
-  scene.add(paper);
+    socket.on('connect', () => {
+      console.log('Connected to Socket.IO');
+    });
 
-  function printPaper() {
-    paper.visible = true;
-    paper.position.y = -0.5;
-    const printSound = document.getElementById('print-sound');
-    printSound.play().catch(() => {});
+    socket.on('new_data', (data) => {
+      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
 
-    const interval = setInterval(() => {
-      paper.position.y += 0.01;
-      if (paper.position.y >= 0.5) {
-        clearInterval(interval);
-        setTimeout(() => paper.visible = false, 2000);
-      }
-    }, 16);
-  }
+      const paper = document.createElement('div');
+      paper.classList.add('paper');
 
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-  }
-  animate();
+      const img = document.createElement('img');
+      img.src = imageUrl;
 
-  const outputArea = document.getElementById('output-area');
-  const socket = io('https://lilroby-printing.onrender.com');
+      paper.appendChild(img);
+      paperWrapper.appendChild(paper);
 
-  socket.on('connect', () => {
-    console.log('Connected to Socket.IO');
-  });
+      // Trigger the animation (make it print from the slot)
+      requestAnimationFrame(() => {
+        paper.classList.add('printing');
+      });
 
-  socket.on('new_data', (data) => {
-    printPaper();
-    outputArea.innerHTML = `
-      <strong>${data.title}</strong><br>
-      From: ${data.name}<br>
-      Message: ${data.message}<br>
-      Post ID: ${data.post_id}
-    `;
-  });
+      // After animation, move it to output area (like a print tray)
+      setTimeout(() => {
+        outputArea.appendChild(paper);
+        paper.style.position = 'static';
+        paper.style.transform = 'none';
+        paper.style.transition = 'none';
+      }, 4000);
+    });
 
-  socket.on('disconnect', () => {
-    console.log('Disconnected from Socket.IO');
-  });
+    socket.on('disconnect', () => {
+      console.log('Disconnected from Socket.IO');
+    });
 
-  setInterval(() => {
-    socket.emit('request-new-image', 'Requesting new image');
-  }, 10000);
-</script>
+    // Example of sending a message to the server (can be used to request new images)
+    setInterval(() => {
+      socket.emit('request-new-image', 'Requesting new image');
+    }, 10000);  // Every 10 seconds
+  </script>
+
 </body>
 </html>
