@@ -76,6 +76,20 @@
       z-index: 10;
       pointer-events: none;
     }
+
+    .debug {
+      position: absolute;
+      top: 100px;
+      left: 20px;
+      color: #0f0;
+      font-size: 11px;
+      font-family: monospace;
+      z-index: 10;
+      pointer-events: none;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
@@ -91,7 +105,10 @@
 
   <div class="controls">
     <button onclick="clearAllPrints()">Clear All Prints</button>
+    <button onclick="toggleDebug()">Toggle Debug</button>
   </div>
+
+  <div class="debug" id="debug" style="display: none;"></div>
 
   <div id="canvas-container"></div>
 
@@ -110,6 +127,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     const statusEl = document.getElementById('status');
+    const debugEl = document.getElementById('debug');
     const container = document.getElementById('canvas-container');
 
     const scene = new THREE.Scene();
@@ -140,12 +158,6 @@
     mainLight.castShadow = true;
     mainLight.shadow.mapSize.width = 2048;
     mainLight.shadow.mapSize.height = 2048;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 20;
-    mainLight.shadow.camera.left = -5;
-    mainLight.shadow.camera.right = 5;
-    mainLight.shadow.camera.top = 5;
-    mainLight.shadow.camera.bottom = -5;
     scene.add(mainLight);
 
     const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
@@ -164,21 +176,43 @@
     groundPlane.receiveShadow = true;
     scene.add(groundPlane);
 
+    const axesHelper = new THREE.AxesHelper(2);
+    scene.add(axesHelper);
+
+    const centerMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05),
+      new THREE.MeshBasicMaterial({ color: 0xff0000 })
+    );
+    centerMarker.position.set(0, 0, 0);
+    scene.add(centerMarker);
+
     let printerModel = null;
     let printerOutputPoint = new THREE.Vector3(0, 1.2, 0);
+    let printerGroup = new THREE.Group();
+    scene.add(printerGroup);
 
     const loader = new GLTFLoader();
-    loader.load('./models/97029.glb', 
+    
+    statusEl.textContent = 'Loading 3D model...';
+    
+    loader.load('./models/LilRoby1zu1.stl.gltf', 
       function(gltf) {
         printerModel = gltf.scene;
         
+        console.log('Model loaded successfully');
+        console.log('Model structure:', printerModel);
+        
         printerModel.traverse((child) => {
+          console.log('Child:', child.name, child.type);
           if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
+            console.log('Mesh found:', child.name);
+            console.log('Material:', child.material);
             if (child.material) {
               if (child.material.map) {
                 child.material.map.encoding = THREE.sRGBEncoding;
+                console.log('Texture found on:', child.name);
               }
               child.material.needsUpdate = true;
             }
@@ -189,33 +223,69 @@
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         
-        printerModel.position.x = -center.x;
-        printerModel.position.z = -center.z;
-        printerModel.position.y = -box.min.y + 0.5;
+        console.log('Bounding box min:', box.min);
+        console.log('Bounding box max:', box.max);
+        console.log('Center:', center);
+        console.log('Size:', size);
+        
+        printerModel.position.set(-center.x, -center.y, -center.z);
+        
+        printerGroup.add(printerModel);
+        printerGroup.position.set(0, 0.5, 0);
         
         const maxDim = Math.max(size.x, size.y, size.z);
         const targetSize = 1.5;
         const scale = targetSize / maxDim;
-        printerModel.scale.set(scale, scale, scale);
+        printerGroup.scale.set(scale, scale, scale);
         
-        const scaledBox = new THREE.Box3().setFromObject(printerModel);
-        printerOutputPoint.y = scaledBox.max.y - 0.1;
+        console.log('Scale:', scale);
+        console.log('Printer group position:', printerGroup.position);
         
-        scene.add(printerModel);
+        const boxHelper = new THREE.BoxHelper(printerGroup, 0x00ff00);
+        scene.add(boxHelper);
+        
+        const finalBox = new THREE.Box3().setFromObject(printerGroup);
+        printerOutputPoint.y = finalBox.max.y;
+        
+        console.log('Final output point:', printerOutputPoint);
+        
+        const outputMarker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.05),
+          new THREE.MeshBasicMaterial({ color: 0x0000ff })
+        );
+        outputMarker.position.copy(printerOutputPoint);
+        scene.add(outputMarker);
         
         statusEl.textContent = 'Printer loaded - Connecting...';
+        
+        updateDebugInfo();
       }, 
-      undefined,
+      function(progress) {
+        if (progress.total > 0) {
+          const percent = (progress.loaded / progress.total * 100).toFixed(0);
+          statusEl.textContent = `Loading model: ${percent}%`;
+          console.log('Loading progress:', percent + '%');
+        }
+      },
       function(error) {
         console.error('Error loading model:', error);
-        statusEl.textContent = 'Failed to load 3D model - Connecting...';
+        statusEl.textContent = 'Failed to load 3D model - Using fallback';
+        
+        const fallbackGeometry = new THREE.BoxGeometry(1, 0.8, 0.6);
+        const fallbackMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const fallbackPrinter = new THREE.Mesh(fallbackGeometry, fallbackMaterial);
+        fallbackPrinter.position.y = 0.5;
+        fallbackPrinter.castShadow = true;
+        fallbackPrinter.receiveShadow = true;
+        scene.add(fallbackPrinter);
+        
+        printerOutputPoint.y = 0.9;
       }
     );
 
     const paperStrip = {
       sections: [],
-      totalHeight: 0,
-      segmentVertices: []
+      totalHeight: 0
     };
 
     class PaperSection {
@@ -293,7 +363,6 @@
         this.vertices = [];
         this.velocities = [];
         
-        const posAttr = geometry.attributes.position;
         for (let i = 0; i <= this.segments; i++) {
           this.vertices.push({
             x: 0,
@@ -330,7 +399,6 @@
       simulate(deltaTime) {
         const gravity = -9.8;
         const damping = 0.98;
-        const stiffness = 50;
         const groundY = -0.5;
         
         this.vertices[0].x = printerOutputPoint.x;
@@ -405,18 +473,10 @@
       }
     }
 
-    let animatingNewPrint = false;
-    let animationProgress = 0;
-    let currentSection = null;
-
     function addPrint(data) {
       const section = new PaperSection(data, paperStrip.totalHeight);
       paperStrip.sections.push(section);
-      currentSection = section;
       paperStrip.totalHeight += section.height;
-      
-      animatingNewPrint = true;
-      animationProgress = 0;
     }
 
     const clock = new THREE.Clock();
@@ -459,6 +519,25 @@
       });
     }
 
+    function updateDebugInfo() {
+      if (printerGroup) {
+        const info = `
+Printer Position: ${printerGroup.position.x.toFixed(2)}, ${printerGroup.position.y.toFixed(2)}, ${printerGroup.position.z.toFixed(2)}
+Printer Scale: ${printerGroup.scale.x.toFixed(2)}
+Output Point: ${printerOutputPoint.x.toFixed(2)}, ${printerOutputPoint.y.toFixed(2)}, ${printerOutputPoint.z.toFixed(2)}
+Camera: ${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)}
+Papers: ${paperStrip.sections.length}
+        `;
+        debugEl.innerHTML = info.trim();
+      }
+    }
+
+    setInterval(updateDebugInfo, 100);
+
+    window.toggleDebug = function() {
+      debugEl.style.display = debugEl.style.display === 'none' ? 'block' : 'none';
+    }
+
     window.clearAllPrints = function() {
       if (confirm('Are you sure you want to clear all prints?')) {
         localStorage.removeItem('lilroby_prints');
@@ -466,10 +545,6 @@
         paperStrip.sections.forEach(section => section.destroy());
         paperStrip.sections = [];
         paperStrip.totalHeight = 0;
-        currentSection = null;
-        
-        animatingNewPrint = false;
-        animationProgress = 0;
         
         statusEl.textContent = 'All prints cleared';
         setTimeout(() => {
