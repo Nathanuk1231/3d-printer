@@ -20,104 +20,88 @@
       letter-spacing: 2px;
     }
 
-    .printer {
-      width: 350px;
-      height: 250px;
-      background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+    #printer-container {
+      width: 600px;
+      height: 400px;
       margin: 0 auto;
-      border-radius: 15px;
       position: relative;
-      box-shadow: 
-        0 15px 40px rgba(0, 0, 0, 0.5),
-        inset 0 -2px 10px rgba(0, 0, 0, 0.3);
-      overflow: hidden;
-      border: 2px solid #444;
     }
 
-    .printer::before {
-      content: '';
+    #printer-canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .paper-output {
       position: absolute;
-      top: 20px;
+      bottom: 0;
       left: 50%;
       transform: translateX(-50%);
-      width: 80px;
-      height: 8px;
-      background: #0a0;
-      border-radius: 4px;
-      box-shadow: 0 0 10px #0a0;
-    }
-
-    .printer::after {
-      content: 'lilRoby';
-      position: absolute;
-      top: 35px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #888;
-      font-size: 12px;
-      letter-spacing: 3px;
-    }
-
-    .slot {
       width: 280px;
-      height: 3px;
-      background: #000;
-      position: absolute;
-      top: 110px;
-      left: 35px;
-      border-radius: 2px;
-      z-index: 10;
-      box-shadow: 
-        0 2px 5px rgba(0, 0, 0, 0.5) inset,
-        0 1px 0 rgba(255, 255, 255, 0.1);
-    }
-
-    .paper-wrapper {
-      position: absolute;
-      top: 110px;
-      left: 35px;
-      width: 280px;
-      height: 300px;
+      height: 0;
       overflow: visible;
-      z-index: 1;
+      z-index: 100;
     }
 
     .paper {
       width: 280px;
       background: white;
       position: absolute;
-      top: 0;
+      bottom: 0;
       left: 0;
-      transition: transform 4s ease-in-out;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
       padding: 20px;
       box-sizing: border-box;
+      transform: translateY(100%);
     }
 
     .paper.printing {
-      transform: translateY(320px);
+      animation: printOut 4s ease-out forwards;
+    }
+
+    @keyframes printOut {
+      0% {
+        transform: translateY(100%);
+      }
+      100% {
+        transform: translateY(0);
+      }
     }
 
     .paper::before,
     .paper::after {
       content: '';
       position: absolute;
-      left: 0;
-      width: 100%;
+      left: -8px;
+      right: -8px;
+      width: calc(100% + 16px);
       height: 8px;
-      background: 
-        linear-gradient(45deg, transparent 33.33%, white 33.33%, white 66.66%, transparent 66.66%),
-        linear-gradient(-45deg, transparent 33.33%, white 33.33%, white 66.66%, transparent 66.66%);
-      background-size: 10px 8px;
-      background-position: 0 0, 5px 0;
+      background-image: 
+        repeating-linear-gradient(
+          90deg,
+          white 0px,
+          white 5px,
+          transparent 5px,
+          transparent 10px
+        );
     }
 
     .paper::before {
-      top: -8px;
+      top: 0;
+      background-image: 
+        radial-gradient(circle at 5px 0px, transparent 4px, white 4px);
+      background-size: 10px 8px;
+      background-repeat: repeat-x;
+      background-position: 0 0;
     }
 
     .paper::after {
-      bottom: -8px;
+      bottom: 0;
+      background-image: 
+        radial-gradient(circle at 5px 8px, transparent 4px, white 4px);
+      background-size: 10px 8px;
+      background-repeat: repeat-x;
+      background-position: 0 0;
     }
 
     .paper img {
@@ -171,8 +155,9 @@
     #output-area .paper {
       position: static;
       transform: none;
-      transition: none;
-      animation: fadeIn 0.5s ease-in;
+      animation: none;
+      opacity: 0;
+      animation: fadeIn 0.5s ease-in forwards;
     }
 
     @keyframes fadeIn {
@@ -212,9 +197,9 @@
 
   <h1>lilRoby Virtual Printer</h1>
 
-  <div class="printer">
-    <div class="slot"></div>
-    <div class="paper-wrapper" id="paper-wrapper"></div>
+  <div id="printer-container">
+    <canvas id="printer-canvas"></canvas>
+    <div class="paper-output" id="paper-output"></div>
   </div>
 
   <div class="controls">
@@ -225,12 +210,63 @@
 
   <div id="output-area"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 
   <script>
-    const paperWrapper = document.getElementById('paper-wrapper');
+    const paperOutput = document.getElementById('paper-output');
     const outputArea = document.getElementById('output-area');
     const statusEl = document.getElementById('status');
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 600 / 400, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ 
+      canvas: document.getElementById('printer-canvas'),
+      antialias: true,
+      alpha: true
+    });
+    
+    renderer.setSize(600, 400);
+    renderer.setClearColor(0x08151d, 1);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 5);
+    scene.add(directionalLight);
+
+    const pointLight = new THREE.PointLight(0x00ff00, 0.5);
+    pointLight.position.set(0, 2, 0);
+    scene.add(pointLight);
+
+    camera.position.set(0, 3, 8);
+    camera.lookAt(0, 0, 0);
+
+    const loader = new THREE.GLTFLoader();
+    loader.load('/models/97029.glb', function(gltf) {
+      const model = gltf.scene;
+      
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.sub(center);
+      
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const scale = 4 / maxDim;
+      model.scale.set(scale, scale, scale);
+      
+      scene.add(model);
+    }, undefined, function(error) {
+      console.error('Error loading model:', error);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
 
     function loadPrints() {
       const stored = localStorage.getItem('lilroby_prints');
@@ -277,17 +313,16 @@
       if (isStored) {
         outputArea.appendChild(paper);
       } else {
-        paperWrapper.appendChild(paper);
+        paperOutput.appendChild(paper);
 
         requestAnimationFrame(() => {
           paper.classList.add('printing');
         });
 
         setTimeout(() => {
+          paper.classList.remove('printing');
+          paperOutput.removeChild(paper);
           outputArea.insertBefore(paper, outputArea.firstChild);
-          paper.style.position = 'static';
-          paper.style.transform = 'none';
-          paper.style.transition = 'none';
         }, 4000);
       }
     }
