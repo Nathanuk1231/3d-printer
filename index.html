@@ -2,163 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Virtual Printer</title>
+  <title>Virtual Printer 3D</title>
   <style>
     body {
       background: #08151d;
       font-family: 'Courier New', monospace;
-      text-align: center;
-      padding: 40px;
       margin: 0;
-      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .ui-overlay {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      color: #fff;
+      z-index: 10;
+      pointer-events: none;
     }
 
     h1 {
-      margin-bottom: 40px;
-      color: #fff;
+      margin: 0 0 10px 0;
       font-size: 2em;
       letter-spacing: 2px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
     }
 
-    #printer-container {
-      width: 600px;
-      height: 400px;
-      margin: 0 auto;
-      position: relative;
-    }
-
-    #printer-canvas {
-      width: 100%;
-      height: 100%;
-    }
-
-    .paper-output {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 280px;
-      height: 0;
-      overflow: visible;
-      z-index: 100;
-    }
-
-    .paper {
-      width: 280px;
-      background: white;
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-      padding: 20px;
-      box-sizing: border-box;
-      transform: translateY(100%);
-    }
-
-    .paper.printing {
-      animation: printOut 4s ease-out forwards;
-    }
-
-    @keyframes printOut {
-      0% {
-        transform: translateY(100%);
-      }
-      100% {
-        transform: translateY(0);
-      }
-    }
-
-    .paper::before,
-    .paper::after {
-      content: '';
-      position: absolute;
-      left: -8px;
-      right: -8px;
-      width: calc(100% + 16px);
-      height: 8px;
-    }
-
-    .paper::before {
-      top: 0;
-      background-image: 
-        radial-gradient(circle at 5px 0px, transparent 4px, white 4px);
-      background-size: 10px 8px;
-      background-repeat: repeat-x;
-      background-position: 0 0;
-    }
-
-    .paper::after {
-      bottom: 0;
-      background-image: 
-        radial-gradient(circle at 5px 8px, transparent 4px, white 4px);
-      background-size: 10px 8px;
-      background-repeat: repeat-x;
-      background-position: 0 0;
-    }
-
-    .paper img {
-      width: 100%;
-      height: auto;
-      display: block;
-      margin-bottom: 15px;
-      border: 1px solid #ddd;
-    }
-
-    .print-title {
-      font-size: 18px;
-      font-weight: bold;
-      margin: 10px 0;
-      color: #000;
-      text-align: left;
-    }
-
-    .print-message {
+    .status {
+      color: #888;
       font-size: 14px;
-      margin: 8px 0;
-      color: #333;
-      text-align: left;
-      line-height: 1.4;
-    }
-
-    .print-name {
-      font-size: 14px;
-      margin: 8px 0;
-      color: #333;
-      text-align: left;
-      font-style: italic;
-    }
-
-    .print-id {
-      font-size: 14px;
-      margin-top: 15px;
-      color: #666;
-      text-align: left;
-    }
-
-    #output-area {
-      margin-top: 60px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 30px;
-      padding-bottom: 40px;
-    }
-
-    #output-area .paper {
-      position: static;
-      transform: none;
-      animation: none;
-      opacity: 0;
-      animation: fadeIn 0.5s ease-in forwards;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
+      text-shadow: 0 2px 5px rgba(0, 0, 0, 0.8);
     }
 
     .controls {
-      margin-top: 30px;
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
     }
 
     .controls button {
@@ -178,29 +65,35 @@
       box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
     }
 
-    .status {
-      color: #888;
-      margin-top: 20px;
-      font-size: 14px;
+    .instructions {
+      position: absolute;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #666;
+      font-size: 12px;
+      text-align: center;
+      z-index: 10;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
 
-  <h1>lilRoby Virtual Printer</h1>
+  <div class="ui-overlay">
+    <h1>lilRoby Virtual Printer</h1>
+    <div class="status" id="status">Connecting...</div>
+  </div>
 
-  <div id="printer-container">
-    <canvas id="printer-canvas"></canvas>
-    <div class="paper-output" id="paper-output"></div>
+  <div class="instructions">
+    Drag to rotate • Scroll to zoom • Right-click to pan
   </div>
 
   <div class="controls">
     <button onclick="clearAllPrints()">Clear All Prints</button>
   </div>
 
-  <div class="status" id="status">Connecting...</div>
-
-  <div id="output-area"></div>
+  <div id="canvas-container"></div>
 
   <script type="importmap">
     {
@@ -214,67 +107,271 @@
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    const paperOutput = document.getElementById('paper-output');
-    const outputArea = document.getElementById('output-area');
     const statusEl = document.getElementById('status');
+    const container = document.getElementById('canvas-container');
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 600 / 400, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ 
-      canvas: document.getElementById('printer-canvas'),
-      antialias: true,
-      alpha: true
-    });
-    
-    renderer.setSize(600, 400);
-    renderer.setClearColor(0x08151d, 1);
+    scene.background = new THREE.Color(0x08151d);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(4, 3, 6);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 2;
+    controls.maxDistance = 20;
+    controls.maxPolarAngle = Math.PI / 2;
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 10, 5);
-    scene.add(directionalLight);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainLight.position.set(5, 10, 5);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048;
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 50;
+    mainLight.shadow.camera.left = -10;
+    mainLight.shadow.camera.right = 10;
+    mainLight.shadow.camera.top = 10;
+    mainLight.shadow.camera.bottom = -10;
+    scene.add(mainLight);
 
-    const pointLight = new THREE.PointLight(0x00ff00, 0.5);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-5, 5, -5);
+    scene.add(fillLight);
+
+    const pointLight = new THREE.PointLight(0x00ff00, 0.3);
     pointLight.position.set(0, 2, 0);
     scene.add(pointLight);
 
-    camera.position.set(0, 3, 8);
-    camera.lookAt(0, 0, 0);
+    const planeGeometry = new THREE.PlaneGeometry(20, 20);
+    const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+    const groundPlane = new THREE.Mesh(planeGeometry, planeMaterial);
+    groundPlane.rotation.x = -Math.PI / 2;
+    groundPlane.position.y = -0.5;
+    groundPlane.receiveShadow = true;
+    scene.add(groundPlane);
+
+    let printerModel = null;
+    let printerOutputHeight = 0;
 
     const loader = new GLTFLoader();
     loader.load('./models/97029.glb', 
       function(gltf) {
-        const model = gltf.scene;
+        printerModel = gltf.scene;
         
-        const box = new THREE.Box3().setFromObject(model);
+        printerModel.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        const box = new THREE.Box3().setFromObject(printerModel);
         const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center);
-        
         const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 4 / maxDim;
-        model.scale.set(scale, scale, scale);
         
-        scene.add(model);
+        printerModel.position.x = -center.x;
+        printerModel.position.y = -box.min.y;
+        printerModel.position.z = -center.z;
+        
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 2.5 / maxDim;
+        printerModel.scale.set(scale, scale, scale);
+        
+        printerOutputHeight = box.max.y * scale - 0.3;
+        
+        scene.add(printerModel);
+        controls.target.set(0, printerOutputHeight / 2, 0);
+        controls.update();
+        
         statusEl.textContent = 'Printer loaded - Connecting...';
       }, 
-      function(progress) {
-        console.log('Loading model...', (progress.loaded / progress.total * 100) + '%');
-      },
+      undefined,
       function(error) {
         console.error('Error loading model:', error);
         statusEl.textContent = 'Failed to load 3D model - Connecting...';
       }
     );
 
+    const printQueue = [];
+    const stackedPapers = [];
+    let currentPrintingPaper = null;
+
+    class PrintPaper {
+      constructor(data) {
+        this.data = data;
+        this.progress = 0;
+        this.targetProgress = 1;
+        this.settled = false;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 700;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          ctx.drawImage(img, 20, 20, canvas.width - 40, 300);
+          
+          ctx.fillStyle = '#000000';
+          ctx.font = 'bold 32px Courier New';
+          if (data.title) {
+            this.wrapText(ctx, data.title, 20, 350, canvas.width - 40, 40);
+          }
+          
+          ctx.fillStyle = '#333333';
+          ctx.font = '24px Courier New';
+          let yPos = data.title ? 430 : 350;
+          
+          if (data.message) {
+            this.wrapText(ctx, data.message, 20, yPos, canvas.width - 40, 32);
+            yPos += 100;
+          }
+          
+          if (data.name) {
+            ctx.font = 'italic 24px Courier New';
+            ctx.fillText('— ' + data.name, 20, yPos);
+            yPos += 50;
+          }
+          
+          if (data.print_id) {
+            ctx.fillStyle = '#666666';
+            ctx.font = '24px Courier New';
+            ctx.fillText('Print #' + data.print_id, 20, yPos + 30);
+          }
+          
+          this.texture.needsUpdate = true;
+        };
+        img.src = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
+        
+        this.texture = new THREE.CanvasTexture(canvas);
+        this.texture.minFilter = THREE.LinearFilter;
+        
+        const geometry = new THREE.PlaneGeometry(1.4, 1.9);
+        const material = new THREE.MeshStandardMaterial({ 
+          map: this.texture,
+          side: THREE.DoubleSide,
+          roughness: 0.8,
+          metalness: 0.1
+        });
+        
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.castShadow = true;
+        this.mesh.receiveShadow = true;
+        this.mesh.position.y = printerOutputHeight;
+        this.mesh.rotation.x = Math.PI / 2;
+        
+        scene.add(this.mesh);
+      }
+      
+      wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = '';
+        let currentY = y;
+        
+        for (let i = 0; i < words.length; i++) {
+          const testLine = line + words[i] + ' ';
+          const metrics = ctx.measureText(testLine);
+          const testWidth = metrics.width;
+          
+          if (testWidth > maxWidth && i > 0) {
+            ctx.fillText(line, x, currentY);
+            line = words[i] + ' ';
+            currentY += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+        ctx.fillText(line, x, currentY);
+      }
+      
+      update(deltaTime) {
+        if (this.settled) return;
+        
+        if (this.progress < this.targetProgress) {
+          this.progress += deltaTime * 0.15;
+          
+          if (this.progress >= this.targetProgress) {
+            this.progress = this.targetProgress;
+            this.settled = true;
+          }
+          
+          const dropDistance = 1.9 * this.progress;
+          this.mesh.position.y = printerOutputHeight - dropDistance;
+          
+          const tilt = Math.sin(this.progress * Math.PI) * 0.05;
+          this.mesh.rotation.x = Math.PI / 2 + tilt;
+          
+          const stackHeight = stackedPapers.length * 0.01;
+          if (this.mesh.position.y < -0.4 + stackHeight) {
+            this.mesh.position.y = -0.4 + stackHeight;
+          }
+        }
+      }
+      
+      destroy() {
+        scene.remove(this.mesh);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+        this.texture.dispose();
+      }
+    }
+
+    function startPrinting(data) {
+      if (currentPrintingPaper) return;
+      
+      currentPrintingPaper = new PrintPaper(data);
+      
+      setTimeout(() => {
+        if (currentPrintingPaper) {
+          stackedPapers.push(currentPrintingPaper);
+          currentPrintingPaper = null;
+          
+          if (printQueue.length > 0) {
+            const nextData = printQueue.shift();
+            startPrinting(nextData);
+          }
+        }
+      }, 7000);
+    }
+
+    const clock = new THREE.Clock();
+
     function animate() {
       requestAnimationFrame(animate);
+      
+      const delta = clock.getDelta();
+      
+      if (currentPrintingPaper) {
+        currentPrintingPaper.update(delta);
+      }
+      
+      controls.update();
       renderer.render(scene, camera);
     }
     animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
     function loadPrints() {
       const stored = localStorage.getItem('lilroby_prints');
@@ -287,64 +384,34 @@
 
     function displayStoredPrints() {
       const prints = loadPrints();
-      prints.forEach(printData => {
-        createPrintElement(printData, true);
+      prints.forEach((printData, index) => {
+        const paper = new PrintPaper(printData);
+        paper.progress = 1;
+        paper.targetProgress = 1;
+        paper.settled = true;
+        
+        const stackHeight = index * 0.01;
+        paper.mesh.position.y = -0.4 + stackHeight;
+        paper.mesh.rotation.x = Math.PI / 2;
+        
+        stackedPapers.push(paper);
       });
-    }
-
-    function createPrintElement(data, isStored = false) {
-      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
-
-      const paper = document.createElement('div');
-      paper.classList.add('paper');
-
-      let content = `<img src="${imageUrl}" alt="Print">`;
-      
-      if (data.title) {
-        content += `<div class="print-title">${escapeHtml(data.title)}</div>`;
-      }
-      
-      if (data.message) {
-        content += `<div class="print-message">${escapeHtml(data.message)}</div>`;
-      }
-      
-      if (data.name) {
-        content += `<div class="print-name">— ${escapeHtml(data.name)}</div>`;
-      }
-      
-      if (data.print_id) {
-        content += `<div class="print-id">Print #${data.print_id}</div>`;
-      }
-
-      paper.innerHTML = content;
-
-      if (isStored) {
-        outputArea.appendChild(paper);
-      } else {
-        paperOutput.appendChild(paper);
-
-        requestAnimationFrame(() => {
-          paper.classList.add('printing');
-        });
-
-        setTimeout(() => {
-          paper.classList.remove('printing');
-          paperOutput.removeChild(paper);
-          outputArea.insertBefore(paper, outputArea.firstChild);
-        }, 4000);
-      }
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
     }
 
     window.clearAllPrints = function() {
       if (confirm('Are you sure you want to clear all prints?')) {
         localStorage.removeItem('lilroby_prints');
-        outputArea.innerHTML = '';
+        
+        stackedPapers.forEach(paper => paper.destroy());
+        stackedPapers.length = 0;
+        
+        if (currentPrintingPaper) {
+          currentPrintingPaper.destroy();
+          currentPrintingPaper = null;
+        }
+        
+        printQueue.length = 0;
+        
         statusEl.textContent = 'All prints cleared';
         setTimeout(() => {
           statusEl.textContent = 'Connected';
@@ -372,49 +439,7 @@
       prints.unshift(data);
       localStorage.setItem('lilroby_prints', JSON.stringify(prints));
 
-      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
-      const paperOutput = document.getElementById('paper-output');
-      const outputArea = document.getElementById('output-area');
-
-      const paper = document.createElement('div');
-      paper.classList.add('paper');
-
-      function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-      }
-
-      let content = `<img src="${imageUrl}" alt="Print">`;
-      
-      if (data.title) {
-        content += `<div class="print-title">${escapeHtml(data.title)}</div>`;
-      }
-      
-      if (data.message) {
-        content += `<div class="print-message">${escapeHtml(data.message)}</div>`;
-      }
-      
-      if (data.name) {
-        content += `<div class="print-name">— ${escapeHtml(data.name)}</div>`;
-      }
-      
-      if (data.print_id) {
-        content += `<div class="print-id">Print #${data.print_id}</div>`;
-      }
-
-      paper.innerHTML = content;
-      paperOutput.appendChild(paper);
-
-      requestAnimationFrame(() => {
-        paper.classList.add('printing');
-      });
-
-      setTimeout(() => {
-        paper.classList.remove('printing');
-        paperOutput.removeChild(paper);
-        outputArea.insertBefore(paper, outputArea.firstChild);
-      }, 4000);
+      window.dispatchEvent(new CustomEvent('new-print', { detail: data }));
 
       document.getElementById('status').textContent = `New print received: #${data.print_id}`;
       setTimeout(() => {
@@ -430,6 +455,27 @@
     setInterval(() => {
       socket.emit('request-new-image', 'Requesting new image');
     }, 10000);
+
+    window.addEventListener('new-print', (event) => {
+      const printQueue = window.printQueue || [];
+      const currentPrintingPaper = window.currentPrintingPaper;
+      
+      if (!currentPrintingPaper) {
+        window.dispatchEvent(new CustomEvent('start-print', { detail: event.detail }));
+      } else {
+        printQueue.push(event.detail);
+      }
+    });
+  </script>
+
+  <script type="module">
+    window.addEventListener('start-print', (event) => {
+      import('./script.js').then(module => {
+        if (typeof startPrinting !== 'undefined') {
+          startPrinting(event.detail);
+        }
+      });
+    });
   </script>
 
 </body>
