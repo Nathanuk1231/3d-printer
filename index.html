@@ -76,14 +76,6 @@
       right: -8px;
       width: calc(100% + 16px);
       height: 8px;
-      background-image: 
-        repeating-linear-gradient(
-          90deg,
-          white 0px,
-          white 5px,
-          transparent 5px,
-          transparent 10px
-        );
     }
 
     .paper::before {
@@ -210,11 +202,19 @@
 
   <div id="output-area"></div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+      }
+    }
+  </script>
 
-  <script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
     const paperOutput = document.getElementById('paper-output');
     const outputArea = document.getElementById('output-area');
     const statusEl = document.getElementById('status');
@@ -244,23 +244,31 @@
     camera.position.set(0, 3, 8);
     camera.lookAt(0, 0, 0);
 
-    const loader = new THREE.GLTFLoader();
-    loader.load('/models/97029.glb', function(gltf) {
-      const model = gltf.scene;
-      
-      const box = new THREE.Box3().setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center);
-      
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const scale = 4 / maxDim;
-      model.scale.set(scale, scale, scale);
-      
-      scene.add(model);
-    }, undefined, function(error) {
-      console.error('Error loading model:', error);
-    });
+    const loader = new GLTFLoader();
+    loader.load('/models/97029.glb', 
+      function(gltf) {
+        const model = gltf.scene;
+        
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center);
+        
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 4 / maxDim;
+        model.scale.set(scale, scale, scale);
+        
+        scene.add(model);
+        statusEl.textContent = 'Printer loaded - Connecting...';
+      }, 
+      function(progress) {
+        console.log('Loading model...', (progress.loaded / progress.total * 100) + '%');
+      },
+      function(error) {
+        console.error('Error loading model:', error);
+        statusEl.textContent = 'Failed to load 3D model - Connecting...';
+      }
+    );
 
     function animate() {
       requestAnimationFrame(animate);
@@ -333,7 +341,7 @@
       return div.innerHTML;
     }
 
-    function clearAllPrints() {
+    window.clearAllPrints = function() {
       if (confirm('Are you sure you want to clear all prints?')) {
         localStorage.removeItem('lilroby_prints');
         outputArea.innerHTML = '';
@@ -344,38 +352,84 @@
       }
     }
 
+    displayStoredPrints();
+  </script>
+
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  <script>
     const socket = io('https://lilroby-printing.onrender.com');
 
     socket.on('connect', () => {
       console.log('Connected to Socket.IO');
-      statusEl.textContent = 'Connected';
+      document.getElementById('status').textContent = 'Connected';
     });
 
     socket.on('new_data', (data) => {
       console.log('New print received:', data);
       
-      const prints = loadPrints();
+      const stored = localStorage.getItem('lilroby_prints');
+      const prints = stored ? JSON.parse(stored) : [];
       prints.unshift(data);
-      savePrints(prints);
+      localStorage.setItem('lilroby_prints', JSON.stringify(prints));
 
-      createPrintElement(data, false);
+      const imageUrl = `http://wokki20.nl/lilroby/api/v1/prints/${data.unique_image_id}.webp`;
+      const paperOutput = document.getElementById('paper-output');
+      const outputArea = document.getElementById('output-area');
 
-      statusEl.textContent = `New print received: #${data.print_id}`;
+      const paper = document.createElement('div');
+      paper.classList.add('paper');
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      let content = `<img src="${imageUrl}" alt="Print">`;
+      
+      if (data.title) {
+        content += `<div class="print-title">${escapeHtml(data.title)}</div>`;
+      }
+      
+      if (data.message) {
+        content += `<div class="print-message">${escapeHtml(data.message)}</div>`;
+      }
+      
+      if (data.name) {
+        content += `<div class="print-name">— ${escapeHtml(data.name)}</div>`;
+      }
+      
+      if (data.print_id) {
+        content += `<div class="print-id">Print #${data.print_id}</div>`;
+      }
+
+      paper.innerHTML = content;
+      paperOutput.appendChild(paper);
+
+      requestAnimationFrame(() => {
+        paper.classList.add('printing');
+      });
+
       setTimeout(() => {
-        statusEl.textContent = 'Connected';
+        paper.classList.remove('printing');
+        paperOutput.removeChild(paper);
+        outputArea.insertBefore(paper, outputArea.firstChild);
+      }, 4000);
+
+      document.getElementById('status').textContent = `New print received: #${data.print_id}`;
+      setTimeout(() => {
+        document.getElementById('status').textContent = 'Connected';
       }, 3000);
     });
 
     socket.on('disconnect', () => {
       console.log('Disconnected from Socket.IO');
-      statusEl.textContent = 'Disconnected - Reconnecting...';
+      document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
     });
 
     setInterval(() => {
       socket.emit('request-new-image', 'Requesting new image');
     }, 10000);
-
-    displayStoredPrints();
   </script>
 
 </body>
