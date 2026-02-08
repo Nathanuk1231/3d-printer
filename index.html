@@ -116,7 +116,7 @@
     scene.background = new THREE.Color(0x08151d);
 
     const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 2, 5);
+    camera.position.set(3, 2, 4);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -128,43 +128,44 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 2;
-    controls.maxDistance = 15;
-    controls.target.set(0, 0, 0);
+    controls.minDistance = 1;
+    controls.maxDistance = 10;
+    controls.target.set(0, 0.5, 0);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
     const mainLight = new THREE.DirectionalLight(0xffffff, 1);
-    mainLight.position.set(5, 10, 5);
+    mainLight.position.set(3, 5, 3);
     mainLight.castShadow = true;
     mainLight.shadow.mapSize.width = 2048;
     mainLight.shadow.mapSize.height = 2048;
     mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 50;
-    mainLight.shadow.camera.left = -10;
-    mainLight.shadow.camera.right = 10;
-    mainLight.shadow.camera.top = 10;
-    mainLight.shadow.camera.bottom = -10;
+    mainLight.shadow.camera.far = 20;
+    mainLight.shadow.camera.left = -5;
+    mainLight.shadow.camera.right = 5;
+    mainLight.shadow.camera.top = 5;
+    mainLight.shadow.camera.bottom = -5;
     scene.add(mainLight);
 
     const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
-    fillLight.position.set(-5, 5, -5);
+    fillLight.position.set(-3, 3, -3);
     scene.add(fillLight);
 
-    const pointLight = new THREE.PointLight(0x00ff00, 0.4);
-    pointLight.position.set(0, 3, 0);
+    const pointLight = new THREE.PointLight(0x00ff00, 0.5);
+    pointLight.position.set(0, 1.5, 0);
     scene.add(pointLight);
 
-    const planeGeometry = new THREE.PlaneGeometry(30, 30);
-    const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+    const planeGeometry = new THREE.PlaneGeometry(20, 20);
+    const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.5 });
     const groundPlane = new THREE.Mesh(planeGeometry, planeMaterial);
     groundPlane.rotation.x = -Math.PI / 2;
-    groundPlane.position.y = -2;
+    groundPlane.position.y = -0.5;
     groundPlane.receiveShadow = true;
     scene.add(groundPlane);
 
     let printerModel = null;
+    let printerOutputPoint = new THREE.Vector3(0, 1.2, 0);
 
     const loader = new GLTFLoader();
     loader.load('./models/97029.glb', 
@@ -176,13 +177,29 @@
             child.castShadow = true;
             child.receiveShadow = true;
             if (child.material) {
+              if (child.material.map) {
+                child.material.map.encoding = THREE.sRGBEncoding;
+              }
               child.material.needsUpdate = true;
             }
           }
         });
 
-        printerModel.position.set(0, 0, 0);
-        printerModel.scale.set(3, 3, 3);
+        const box = new THREE.Box3().setFromObject(printerModel);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        
+        printerModel.position.x = -center.x;
+        printerModel.position.z = -center.z;
+        printerModel.position.y = -box.min.y + 0.5;
+        
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const targetSize = 1.5;
+        const scale = targetSize / maxDim;
+        printerModel.scale.set(scale, scale, scale);
+        
+        const scaledBox = new THREE.Box3().setFromObject(printerModel);
+        printerOutputPoint.y = scaledBox.max.y - 0.1;
         
         scene.add(printerModel);
         
@@ -195,10 +212,10 @@
       }
     );
 
-    const printQueue = [];
     const paperStrip = {
       sections: [],
-      totalHeight: 0
+      totalHeight: 0,
+      segmentVertices: []
     };
 
     class PaperSection {
@@ -206,6 +223,7 @@
         this.data = data;
         this.yOffset = yOffset;
         this.height = 2.0;
+        this.segments = 20;
         
         const canvas = document.createElement('canvas');
         canvas.width = 512;
@@ -260,7 +278,7 @@
         this.texture = new THREE.CanvasTexture(canvas);
         this.texture.minFilter = THREE.LinearFilter;
         
-        const geometry = new THREE.PlaneGeometry(1.4, this.height);
+        const geometry = new THREE.PlaneGeometry(1.0, this.height, 1, this.segments);
         const material = new THREE.MeshStandardMaterial({ 
           map: this.texture,
           side: THREE.DoubleSide,
@@ -271,7 +289,19 @@
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.castShadow = true;
         this.mesh.receiveShadow = true;
-        this.mesh.position.set(0, 1.5 - yOffset, 0);
+        
+        this.vertices = [];
+        this.velocities = [];
+        
+        const posAttr = geometry.attributes.position;
+        for (let i = 0; i <= this.segments; i++) {
+          this.vertices.push({
+            x: 0,
+            y: printerOutputPoint.y - (i / this.segments) * this.height,
+            z: 0
+          });
+          this.velocities.push({ x: 0, y: 0, z: 0 });
+        }
         
         scene.add(this.mesh);
       }
@@ -297,9 +327,74 @@
         ctx.fillText(line, x, currentY);
       }
       
-      updatePosition(yOffset) {
-        this.yOffset = yOffset;
-        this.mesh.position.y = 1.5 - yOffset;
+      simulate(deltaTime) {
+        const gravity = -9.8;
+        const damping = 0.98;
+        const stiffness = 50;
+        const groundY = -0.5;
+        
+        this.vertices[0].x = printerOutputPoint.x;
+        this.vertices[0].y = printerOutputPoint.y;
+        this.vertices[0].z = printerOutputPoint.z;
+        this.velocities[0] = { x: 0, y: 0, z: 0 };
+        
+        for (let i = 1; i <= this.segments; i++) {
+          this.velocities[i].y += gravity * deltaTime;
+          
+          this.vertices[i].x += this.velocities[i].x * deltaTime;
+          this.vertices[i].y += this.velocities[i].y * deltaTime;
+          this.vertices[i].z += this.velocities[i].z * deltaTime;
+          
+          this.velocities[i].x *= damping;
+          this.velocities[i].y *= damping;
+          this.velocities[i].z *= damping;
+          
+          if (this.vertices[i].y < groundY) {
+            this.vertices[i].y = groundY;
+            this.velocities[i].y = 0;
+            this.velocities[i].x *= 0.8;
+            this.velocities[i].z *= 0.8;
+          }
+        }
+        
+        for (let iter = 0; iter < 3; iter++) {
+          for (let i = 1; i <= this.segments; i++) {
+            const prev = this.vertices[i - 1];
+            const curr = this.vertices[i];
+            
+            const dx = curr.x - prev.x;
+            const dy = curr.y - prev.y;
+            const dz = curr.z - prev.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const targetDist = this.height / this.segments;
+            
+            if (dist > 0) {
+              const diff = (dist - targetDist) / dist;
+              const offsetX = dx * diff * 0.5;
+              const offsetY = dy * diff * 0.5;
+              const offsetZ = dz * diff * 0.5;
+              
+              if (i > 1) {
+                this.vertices[i - 1].x += offsetX;
+                this.vertices[i - 1].y += offsetY;
+                this.vertices[i - 1].z += offsetZ;
+              }
+              
+              curr.x -= offsetX;
+              curr.y -= offsetY;
+              curr.z -= offsetZ;
+            }
+          }
+        }
+        
+        const posAttr = this.mesh.geometry.attributes.position;
+        for (let i = 0; i <= this.segments; i++) {
+          const idx = i * 2;
+          posAttr.setXYZ(idx, -0.5, this.vertices[i].y, this.vertices[i].z);
+          posAttr.setXYZ(idx + 1, 0.5, this.vertices[i].y, this.vertices[i].z);
+        }
+        posAttr.needsUpdate = true;
+        this.mesh.geometry.computeVertexNormals();
       }
       
       destroy() {
@@ -312,10 +407,12 @@
 
     let animatingNewPrint = false;
     let animationProgress = 0;
+    let currentSection = null;
 
     function addPrint(data) {
       const section = new PaperSection(data, paperStrip.totalHeight);
       paperStrip.sections.push(section);
+      currentSection = section;
       paperStrip.totalHeight += section.height;
       
       animatingNewPrint = true;
@@ -327,24 +424,11 @@
     function animate() {
       requestAnimationFrame(animate);
       
-      const delta = clock.getDelta();
+      const delta = Math.min(clock.getDelta(), 0.033);
       
-      if (animatingNewPrint) {
-        animationProgress += delta * 0.5;
-        
-        if (animationProgress >= 1) {
-          animationProgress = 1;
-          animatingNewPrint = false;
-        }
-        
-        const targetOffset = paperStrip.totalHeight - 2;
-        const currentOffset = targetOffset * animationProgress;
-        
-        paperStrip.sections.forEach((section, index) => {
-          const baseOffset = paperStrip.sections.slice(0, index).reduce((sum, s) => sum + s.height, 0);
-          section.updatePosition(baseOffset - currentOffset);
-        });
-      }
+      paperStrip.sections.forEach(section => {
+        section.simulate(delta);
+      });
       
       controls.update();
       renderer.render(scene, camera);
@@ -368,19 +452,11 @@
 
     function displayStoredPrints() {
       const prints = loadPrints();
-      prints.reverse().forEach((printData) => {
-        const section = new PaperSection(printData, paperStrip.totalHeight);
-        paperStrip.sections.push(section);
-        paperStrip.totalHeight += section.height;
+      prints.reverse().forEach((printData, index) => {
+        setTimeout(() => {
+          addPrint(printData);
+        }, index * 100);
       });
-      
-      if (paperStrip.sections.length > 0) {
-        const targetOffset = paperStrip.totalHeight - 2;
-        paperStrip.sections.forEach((section, index) => {
-          const baseOffset = paperStrip.sections.slice(0, index).reduce((sum, s) => sum + s.height, 0);
-          section.updatePosition(baseOffset - targetOffset);
-        });
-      }
     }
 
     window.clearAllPrints = function() {
@@ -390,8 +466,8 @@
         paperStrip.sections.forEach(section => section.destroy());
         paperStrip.sections = [];
         paperStrip.totalHeight = 0;
+        currentSection = null;
         
-        printQueue.length = 0;
         animatingNewPrint = false;
         animationProgress = 0;
         
@@ -406,7 +482,9 @@
       addPrint(data);
     }
 
-    displayStoredPrints();
+    setTimeout(() => {
+      displayStoredPrints();
+    }, 500);
   </script>
 
   <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
